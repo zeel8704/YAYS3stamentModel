@@ -72,41 +72,19 @@ class ExcelWriter:
             ws.freeze_panes = freeze
 
     def create_model(self, file_path_or_buffer):
-        self._write_assumptions()
         self._write_income_statement()
         self._write_balance_sheet()
         self._write_cash_flow_statement()
         self._write_capex_schedule()
         self._write_debt_schedule()
+        self._protect_workbook()
         self.wb.save(file_path_or_buffer)
 
-    def _write_assumptions(self):
-        ws = self.wb.create_sheet("Assumptions")
-        self._apply_sheet_beautification(ws, freeze='C4', zoom=85)
-        ws.column_dimensions['B'].width = 40
-        ws.column_dimensions['C'].width = 20
-        
-        ws["B1"] = "STARTUP FINANCIAL MODEL - KEY ASSUMPTIONS"
-        ws["B1"].font = self.bold_font
-        ws["B2"] = "All figures in INR"
-        
-        r = 4
-        for category, items in self.model.assumptions.items():
-            ws.cell(row=r, column=2, value=category).font = self.bold_font
-            r += 1
-            for key, value in items.items():
-                ws.cell(row=r, column=2, value=key).alignment = Alignment(indent=1)
-                c_cell = ws.cell(row=r, column=3, value=value)
-                c_cell.font = self.input_font
-                c_cell.alignment = Alignment(indent=1)
-                
-                # Format
-                if "%" in key or "Rate" in key or "Change" in key:
-                    c_cell.number_format = self.fmt_percent
-                else:
-                    c_cell.number_format = self.fmt_number
-                r += 1
-            r += 1
+    def _protect_workbook(self):
+        for ws in self.wb.worksheets:
+            ws.protection.sheet = True
+            ws.protection.password = 'financial_model_lock_99'
+            ws.protection.enable()
 
     def _apply_standard_headers(self, ws, title):
         ws.column_dimensions['B'].width = 40
@@ -153,32 +131,37 @@ class ExcelWriter:
             if is_bold: cell.font = self.bold_font
             if indent: cell.alignment = Alignment(indent=indent)
 
+        rev = self.model.assumptions["REVENUE ASSUMPTIONS"]
+        sga = self.model.assumptions["SG&A ASSUMPTIONS"]
+        other = self.model.assumptions["OTHER"]
+        
         for i in range(1, self.model.years + 1):
             col = get_column_letter(2 + i)
             prev_col = get_column_letter(2 + i - 1) if i > 1 else None
             
             # Row 3: Revenue
             if i == 1:
-                ws.cell(row=3, column=2+i, value="=Assumptions!C5")
+                ws.cell(row=3, column=2+i, value=rev["Year 1 Revenue (INR)"])
             else:
-                ws.cell(row=3, column=2+i, value=f"={prev_col}3*(1+Assumptions!C{4+i})")
+                growth_rates = [0, 0, rev["Revenue Growth Rate - Y2"], rev["Revenue Growth Rate - Y3"], rev["Revenue Growth Rate - Y4"], rev["Revenue Growth Rate - Y5"]]
+                ws.cell(row=3, column=2+i, value=f"={prev_col}3*(1+{growth_rates[i]})")
                 
             # Row 4: COGS
             ws.cell(row=4, column=2+i, value=f"=-{col}3*(1-{col}6)")
             
-            # Row 5: Gross Profit (C3+C4 was in reference, actually C3+C4 gives net if C4 is negative)
+            # Row 5: Gross Profit
             ws.cell(row=5, column=2+i, value=f"={col}3+{col}4").font = self.bold_font
             
             # Row 6: Gross Margin %
             if i == 1:
-                ws.cell(row=6, column=2+i, value="=Assumptions!C11")
+                ws.cell(row=6, column=2+i, value=rev["Gross Margin %"])
             else:
-                ws.cell(row=6, column=2+i, value=f"={prev_col}6*(1+Assumptions!$C$10)")
+                ws.cell(row=6, column=2+i, value=f"={prev_col}6*(1+{rev['Gross Margin Change']})")
                 
             # Rows 9,10,11
-            ws.cell(row=9, column=2+i, value=f"=-{col}3*Assumptions!C14")
-            ws.cell(row=10, column=2+i, value=f"=-{col}3*Assumptions!C15")
-            ws.cell(row=11, column=2+i, value=f"=-{col}3*Assumptions!C16")
+            ws.cell(row=9, column=2+i, value=f"=-{col}3*{sga['Sales & Marketing (% Revenue)']}")
+            ws.cell(row=10, column=2+i, value=f"=-{col}3*{sga['General & Admin (% Revenue)']}")
+            ws.cell(row=11, column=2+i, value=f"=-{col}3*{sga['R&D (% Revenue)']}")
             
             # Row 12: Depreciation
             ws.cell(row=12, column=2+i, value=f"=-'Balance Sheet'!{col}24")
@@ -205,7 +188,7 @@ class ExcelWriter:
             ws.cell(row=22, column=2+i, value=f"={col}18+{col}20").font = self.bold_font
             
             # Row 23: Income Tax Expense
-            ws.cell(row=23, column=2+i, value=f"=IF({col}22>0,-{col}22*Assumptions!C29,0)")
+            ws.cell(row=23, column=2+i, value=f"=IF({col}22>0,-{col}22*{other['Tax Rate']},0)")
             
             # Row 25: Net Income
             ws.cell(row=25, column=2+i, value=f"={col}22+{col}23").font = self.bold_font
@@ -282,8 +265,9 @@ class ExcelWriter:
             ws.cell(row=19, column=2+i, value=f"='Debt Schedule'!{col}7")
             ws.cell(row=20, column=2+i, value=f"={col}18+{col}19").font = self.bold_font
             
+            other = self.model.assumptions["OTHER"]
             if i == 1:
-                ws.cell(row=21, column=2+i, value="=Assumptions!C31")
+                ws.cell(row=21, column=2+i, value=other["Beginning Equity (INR)"])
             else:
                 ws.cell(row=21, column=2+i, value=f"={prev_col}21")
                 
@@ -364,8 +348,9 @@ class ExcelWriter:
             ws.cell(row=22, column=2+i, value=f"={col}20").font = self.bold_font
             ws.cell(row=22, column=2+i).border = self.border_top_bottom
             
+            other = self.model.assumptions["OTHER"]
             if i == 1:
-                ws.cell(row=24, column=2+i, value=f"=Assumptions!C30")
+                ws.cell(row=24, column=2+i, value=other["Beginning Cash (INR)"])
             else:
                 ws.cell(row=24, column=2+i, value=f"={prev_col}25")
                 
@@ -406,7 +391,8 @@ class ExcelWriter:
             else:
                 ws.cell(row=4, column=2+i, value=f"={prev_col}6")
                 
-            ws.cell(row=5, column=2+i, value=f"='Income Statement'!{col}3*Assumptions!C19")
+            cap = self.model.assumptions["CAPEX & DEPRECIATION"]
+            ws.cell(row=5, column=2+i, value=f"='Income Statement'!{col}3*{cap['Capex (% Revenue)']}")
             ws.cell(row=6, column=2+i, value=f"={col}4+{col}5").font = self.bold_font
             
             if i == 1:
@@ -414,7 +400,7 @@ class ExcelWriter:
             else:
                 ws.cell(row=7, column=2+i, value=f"={prev_col}9")
                 
-            ws.cell(row=8, column=2+i, value=f"={col}6/Assumptions!C20").font = self.bold_font
+            ws.cell(row=8, column=2+i, value=f"={col}6/{cap['Useful Life (years)']}").font = self.bold_font
             ws.cell(row=9, column=2+i, value=f"={col}7+{col}8")
             ws.cell(row=10, column=2+i, value=f"={col}6-{col}9").font = self.bold_font
             ws.cell(row=10, column=2+i).border = self.border_top_bottom
@@ -443,13 +429,14 @@ class ExcelWriter:
             col = get_column_letter(2 + i)
             prev_col = get_column_letter(2 + i - 1) if i > 1 else None
             
+            debt = self.model.assumptions["DEBT SCHEDULE"]
             if i == 1:
-                ws.cell(row=4, column=2+i, value=f"=Assumptions!C24")
+                ws.cell(row=4, column=2+i, value=debt["Beginning Debt (INR)"])
             else:
                 ws.cell(row=4, column=2+i, value=f"={prev_col}7")
                 
-            ws.cell(row=5, column=2+i, value=f"=-MIN(Assumptions!C26,{col}4)")
-            ws.cell(row=6, column=2+i, value=f"={col}4*Assumptions!C25").font = self.bold_font
+            ws.cell(row=5, column=2+i, value=f"=-MIN({debt['Annual Debt Repayment (INR)']},{col}4)")
+            ws.cell(row=6, column=2+i, value=f"={col}4*{debt['Annual Interest Rate']}").font = self.bold_font
             ws.cell(row=7, column=2+i, value=f"={col}4+{col}5").font = self.bold_font
             ws.cell(row=7, column=2+i).border = self.border_top_bottom
             
