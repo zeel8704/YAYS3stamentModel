@@ -57,10 +57,20 @@ class ExcelWriter:
         self.border_top = Border(top=Side(style='thin'))
         self.border_top_bottom = Border(top=Side(style='thin'), bottom=Side(style='double'))
         
+        # Standard formats based on reference model
+        self.fmt_number = '#,##0;(#,##0);"-"'
+        self.fmt_percent = '0.0%;(0.0%);"-"'
+        
     def _apply_header_style(self, cell):
         cell.font = self.header_font
         cell.fill = self.header_fill
         cell.alignment = Alignment(horizontal="center")
+
+    def _apply_sheet_beautification(self, ws, freeze='C3', zoom=85):
+        ws.sheet_view.showGridLines = False
+        ws.sheet_view.zoomScale = zoom
+        if freeze:
+            ws.freeze_panes = freeze
 
     def create_model(self):
         self._write_assumptions()
@@ -74,6 +84,7 @@ class ExcelWriter:
 
     def _write_assumptions(self):
         ws = self.wb.create_sheet("Assumptions")
+        self._apply_sheet_beautification(ws, freeze='C4', zoom=85)
         ws.column_dimensions['B'].width = 40
         ws.column_dimensions['C'].width = 20
         
@@ -93,9 +104,9 @@ class ExcelWriter:
                 
                 # Format
                 if "%" in key or "Rate" in key or "Change" in key:
-                    c_cell.number_format = '0.0%'
+                    c_cell.number_format = self.fmt_percent
                 else:
-                    c_cell.number_format = '#,##0'
+                    c_cell.number_format = self.fmt_number
                 r += 1
             r += 1
 
@@ -114,6 +125,7 @@ class ExcelWriter:
 
     def _write_income_statement(self):
         ws = self.wb.create_sheet("Income Statement")
+        self._apply_sheet_beautification(ws, freeze='C3')
         self._apply_standard_headers(ws, "Income Statement (INR)")
         
         roles = [
@@ -206,13 +218,14 @@ class ExcelWriter:
 
             # Format percentages
             for r in [6, 16, 19, 26]:
-                ws.cell(row=r, column=2+i).number_format = '0.0%'
+                ws.cell(row=r, column=2+i).number_format = self.fmt_percent
             # Format numbers
             for r in [3, 4, 5, 9, 10, 11, 12, 13, 15, 18, 20, 22, 23, 25]:
-                ws.cell(row=r, column=2+i).number_format = '#,##0'
+                ws.cell(row=r, column=2+i).number_format = self.fmt_number
 
     def _write_balance_sheet(self):
         ws = self.wb.create_sheet("Balance Sheet")
+        self._apply_sheet_beautification(ws, freeze='C3')
         self._apply_standard_headers(ws, "BALANCE SHEET (INR)")
         
         roles = [
@@ -290,10 +303,11 @@ class ExcelWriter:
             ws.cell(row=28, column=2+i, value=f"={col}13-{col}26")
             
             for r in [5,6,7,8,9,10,11,13,16,17,18,19,20,21,22,23,24,26,28]:
-                ws.cell(row=r, column=2+i).number_format = '#,##0'
+                ws.cell(row=r, column=2+i).number_format = self.fmt_number
 
     def _write_cash_flow_statement(self):
         ws = self.wb.create_sheet("Cash Flow Statement")
+        self._apply_sheet_beautification(ws, freeze='C3')
         self._apply_standard_headers(ws, "CASH FLOW STATEMENT (INR)")
         
         roles = [
@@ -363,10 +377,11 @@ class ExcelWriter:
             ws.cell(row=27, column=2+i).border = self.border_top_bottom
             
             for r in [5,6,7,8,9,10,12,15,17,20,22,24,25,27]:
-                ws.cell(row=r, column=2+i).number_format = '#,##0'
+                ws.cell(row=r, column=2+i).number_format = self.fmt_number
 
     def _write_capex_schedule(self):
         ws = self.wb.create_sheet("Capex Schedule")
+        self._apply_sheet_beautification(ws, freeze='C3')
         self._apply_standard_headers(ws, "CAPEX & DEPRECIATION SCHEDULE (INR)")
         
         roles = [
@@ -407,10 +422,11 @@ class ExcelWriter:
             ws.cell(row=10, column=2+i).border = self.border_top_bottom
             
             for r in [4,5,6,7,8,9,10]:
-                ws.cell(row=r, column=2+i).number_format = '#,##0'
+                ws.cell(row=r, column=2+i).number_format = self.fmt_number
 
     def _write_debt_schedule(self):
         ws = self.wb.create_sheet("Debt Schedule")
+        self._apply_sheet_beautification(ws, freeze='C3')
         self._apply_standard_headers(ws, "DEBT SCHEDULE (INR)")
         
         roles = [
@@ -440,7 +456,7 @@ class ExcelWriter:
             ws.cell(row=7, column=2+i).border = self.border_top_bottom
             
             for r in [4,5,6,7]:
-                ws.cell(row=r, column=2+i).number_format = '#,##0'
+                ws.cell(row=r, column=2+i).number_format = self.fmt_number
 
 if __name__ == "__main__":
     model = FinancialModel()
