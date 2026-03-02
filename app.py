@@ -1,6 +1,6 @@
 import streamlit as st
 import io
-from generator import FinancialModel, ExcelWriter
+from pdf_generator import FinancialModelData, PDFGenerator
 
 st.set_page_config(page_title="Startup Financial Model", page_icon="📊", layout="wide")
 
@@ -38,9 +38,8 @@ st.markdown("""
 st.title("📊 3-Statement Financial Model Generator")
 st.markdown("""
 Welcome to the professional startup financial model generator. 
-Adjust the assumptions below, and the app will generate a fully linked, dynamic Excel file complete with an Income Statement, Balance Sheet, Cash Flow Statement, Capex Schedule, and Debt Schedule.
+Adjust the assumptions below, and the app will generate a clean and professional PDF report containing your Income Statement, Balance Sheet, Cash Flow Statement, Capex Schedule, and Debt Schedule.
 """)
-
 st.divider()
 
 user_assumptions = {
@@ -95,23 +94,23 @@ st.divider()
 col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
 
 with col_btn2:
-    st.markdown("<h3 style='text-align: center'>Generate Your Excel File</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center'>Generate Your PDF Report</h3>", unsafe_allow_html=True)
     if st.button("Generate Financial Model", use_container_width=True):
-        with st.spinner("Generating financial model..."):
-            model = FinancialModel(custom_assumptions=user_assumptions)
-            writer = ExcelWriter(model)
+        with st.spinner("Generating financial model PDF..."):
+            model_data = FinancialModelData(custom_assumptions=user_assumptions)
+            pdf = PDFGenerator(model_data)
             
             output = io.BytesIO()
-            writer.create_model(output)
+            pdf.build_pdf(output)
             output.seek(0)
             
-            st.success("Financial Model generated successfully!")
+            st.success("Financial Model PDF generated successfully!")
             
             st.download_button(
-                label="📥 Download Excel File",
+                label="📥 Download PDF Report",
                 data=output,
-                file_name="financial_model_output.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                file_name="financial_model_output.pdf",
+                mime="application/pdf",
                 use_container_width=True
             )
 
